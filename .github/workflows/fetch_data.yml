@@ -21,6 +21,9 @@ jobs:
         run: |
           pipx install uv
 
+      - name: Setup DVC
+        uses: iterative/setup-dvc@v1
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
@@ -29,6 +32,12 @@ jobs:
       - name: Install dependencies
         run: |
           uv sync --frozen
+
+      - name: DVC pull data
+        run: |
+          dvc remote modify origin --local access_key_id ${{ secrets.DAGSHUB_ACCESS_KEY_ID }}
+          dvc remote modify origin --local secret_access_key ${{ secrets.DAGSHUB_SECRET_ACCESS_KEY }}
+          dvc pull
 
       - name: Run fetch script
         run: |
@@ -40,10 +49,14 @@ jobs:
 
       - name: Commit data changes
         run: |
-          git add data
+          dvc remote modify origin --local access_key_id ${{ secrets.DAGSHUB_ACCESS_KEY_ID }}
+          dvc remote modify origin --local secret_access_key ${{ secrets.DAGSHUB_SECRET_ACCESS_KEY }}
+          dvc add data
+          dvc push
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Actions"
-          git commit -m "Updated raw air data"
+          git add data.dvc .gitignore
+          git commit -m "Updated raw air data" || echo "No changes to commit"
 
       - name: Push changes
         uses: ad-m/github-push-action@master
