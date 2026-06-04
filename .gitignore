@@ -209,3 +209,7 @@ __marimo__/
 # RAW DATA
 data/raw/
 /data
+/models
+/reports
+/predictions
+/.uv-cache

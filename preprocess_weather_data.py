@@ -1,0 +1,11 @@
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
+
+from iis_weather.ingestion import preprocess_weather_data
+
+
+if __name__ == "__main__":
+    preprocess_weather_data()
+

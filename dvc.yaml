@@ -1,0 +1,75 @@
+stages:
+  fetch_weather_data:
+    cmd: uv run python src/data/fetch_weather_data.py --days 180
+    deps:
+      - src/data/fetch_weather_data.py
+      - src/iis_weather/config.py
+      - src/iis_weather/ingestion.py
+      - src/iis_weather/io.py
+    outs:
+      - data/raw/weather
+
+  preprocess_weather_data:
+    cmd: uv run python src/data/preprocess_weather_data.py
+    deps:
+      - data/raw/weather
+      - src/data/preprocess_weather_data.py
+      - src/iis_weather/config.py
+      - src/iis_weather/ingestion.py
+      - src/iis_weather/io.py
+    outs:
+      - data/preprocessed/weather
+
+  validate_weather_data:
+    cmd: uv run python src/data/validate_weather_data.py
+    deps:
+      - data/preprocessed/weather
+      - src/data/validate_weather_data.py
+      - src/iis_weather/config.py
+      - src/iis_weather/io.py
+      - src/iis_weather/validation.py
+    metrics:
+      - reports/data_validation.json:
+          cache: false
+
+  build_weather_dataset:
+    cmd: uv run python src/features/build_dataset.py
+    deps:
+      - data/preprocessed/weather
+      - src/features/build_dataset.py
+      - src/iis_weather/config.py
+      - src/iis_weather/preprocessing.py
+    outs:
+      - data/processed/weather
+
+  train_weather_models:
+    cmd: uv run python src/models/train_weather_models.py
+    deps:
+      - data/processed/weather
+      - src/models/train_weather_models.py
+      - src/iis_weather/config.py
+      - src/iis_weather/io.py
+      - src/iis_weather/models.py
+      - src/iis_weather/preprocessing.py
+    outs:
+      - models/weather
+      - reports/experiments
+    metrics:
+      - reports/model_evaluation.json:
+          cache: false
+
+  evaluate_production:
+    cmd: uv run python src/monitoring/evaluate_production.py
+    deps:
+      - data/processed/weather
+      - models/weather
+      - reports/model_evaluation.json
+      - src/monitoring/evaluate_production.py
+      - src/iis_weather/config.py
+      - src/iis_weather/io.py
+      - src/iis_weather/models.py
+      - src/iis_weather/monitoring.py
+      - src/iis_weather/preprocessing.py
+    metrics:
+      - reports/production_monitoring.json:
+          cache: false

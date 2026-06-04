@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pipx install uv
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Prepare local demo data
+        run: |
+          uv run python src/data/fetch_weather_data.py --demo --days 90
+          uv run python src/data/preprocess_weather_data.py
+
+      - name: Validate data
+        run: uv run python src/data/validate_weather_data.py
+
+      - name: Build dataset
+        run: uv run python src/features/build_dataset.py
+
+      - name: Train models
+        run: uv run python src/models/train_weather_models.py
+
+      - name: Evaluate production window
+        run: uv run python src/monitoring/evaluate_production.py
+
+      - name: Run tests
+        run: uv run python -m unittest discover -s tests

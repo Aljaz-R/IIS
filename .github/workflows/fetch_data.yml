@@ -1,4 +1,4 @@
-name: Fetch data on schedule
+name: Fetch weather data on schedule
 
 on:
   workflow_dispatch:
@@ -6,8 +6,8 @@ on:
     - cron: '0 0 * * *'
 
 jobs:
-  fetch_air:
-    name: Fetch and pre-process air data
+  fetch_weather:
+    name: Fetch and pre-process weather data
     runs-on: ubuntu-latest
 
     steps:
@@ -29,6 +29,10 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install DVC S3 support
+        run: |
+          python -m pip install "dvc[s3]"
+
       - name: Install dependencies
         run: |
           uv sync --frozen
@@ -41,22 +45,40 @@ jobs:
 
       - name: Run fetch script
         run: |
-          uv run python src/data/fetch_air_data.py
+          uv run python src/data/fetch_weather_data.py
 
       - name: Run pre-process script
         run: |
-          uv run python src/data/preprocess_air_data.py
+          uv run python src/data/preprocess_weather_data.py
+
+      - name: Validate data
+        run: |
+          uv run python src/data/validate_weather_data.py
+
+      - name: Build training dataset
+        run: |
+          uv run python src/features/build_dataset.py
+
+      - name: Train models
+        run: |
+          uv run python src/models/train_weather_models.py
+
+      - name: Evaluate production window
+        run: |
+          uv run python src/monitoring/evaluate_production.py
 
       - name: Commit data changes
         run: |
           dvc remote modify origin --local access_key_id ${{ secrets.DAGSHUB_ACCESS_KEY_ID }}
           dvc remote modify origin --local secret_access_key ${{ secrets.DAGSHUB_SECRET_ACCESS_KEY }}
+          mkdir -p predictions
           dvc add data
+          dvc add models reports predictions
           dvc push
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Actions"
-          git add data.dvc .gitignore
-          git commit -m "Updated raw air data" || echo "No changes to commit"
+          git add data.dvc models.dvc reports.dvc predictions.dvc .gitignore
+          git commit -m "Update weather data and model artifacts" || echo "No changes to commit"
 
       - name: Push changes
         uses: ad-m/github-push-action@master

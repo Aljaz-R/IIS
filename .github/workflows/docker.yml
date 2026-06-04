@@ -1,0 +1,101 @@
+name: Docker build and deploy
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pipx install uv
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Restore DVC artifacts or build demo artifacts
+        env:
+          DAGSHUB_ACCESS_KEY_ID: ${{ secrets.DAGSHUB_ACCESS_KEY_ID }}
+          DAGSHUB_SECRET_ACCESS_KEY: ${{ secrets.DAGSHUB_SECRET_ACCESS_KEY }}
+        run: |
+          if [ -n "$DAGSHUB_ACCESS_KEY_ID" ] && [ -n "$DAGSHUB_SECRET_ACCESS_KEY" ]; then
+            python -m pip install "dvc[s3]"
+            dvc remote modify origin --local access_key_id "$DAGSHUB_ACCESS_KEY_ID"
+            dvc remote modify origin --local secret_access_key "$DAGSHUB_SECRET_ACCESS_KEY"
+            dvc pull || echo "DVC pull failed; falling back to demo artifacts."
+          fi
+
+          if [ ! -f models/weather/temperature_regressor.pkl ] || [ ! -f models/weather/precipitation_classifier.pkl ]; then
+            uv run python src/data/fetch_weather_data.py --demo --days 90
+            uv run python src/data/preprocess_weather_data.py
+            uv run python src/data/validate_weather_data.py
+            uv run python src/features/build_dataset.py
+            uv run python src/models/train_weather_models.py
+            uv run python src/monitoring/evaluate_production.py
+          fi
+
+      - name: Set image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+
+      - name: Build and optionally push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  deploy:
+    needs: docker
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Trigger production deploy hook
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL is not configured; image was built and pushed, deploy skipped."
+            exit 0
+          fi
+          curl -fsSL -X POST "$RENDER_DEPLOY_HOOK_URL"
