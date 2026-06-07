@@ -38,12 +38,14 @@ jobs:
         run: |
           if [ -n "$DAGSHUB_ACCESS_KEY_ID" ] && [ -n "$DAGSHUB_SECRET_ACCESS_KEY" ]; then
             python -m pip install "dvc[s3]"
+            dvc remote add --force -d origin s3://dvc
+            dvc remote modify origin endpointurl https://dagshub.com/Aljaz-R/IIS.s3
             dvc remote modify origin --local access_key_id "$DAGSHUB_ACCESS_KEY_ID"
             dvc remote modify origin --local secret_access_key "$DAGSHUB_SECRET_ACCESS_KEY"
-            dvc pull || echo "DVC pull failed; falling back to demo artifacts."
+            dvc pull -r origin || echo "DVC pull failed; falling back to demo artifacts."
           fi
 
-          if [ ! -f models/weather/temperature_regressor.pkl ] || [ ! -f models/weather/precipitation_classifier.pkl ]; then
+          if [ ! -f models/weather/temperature_regressor.pkl ] || [ ! -f models/weather/precipitation_classifier.pkl ] || [ ! -f reports/model_evaluation.json ]; then
             uv run python src/data/fetch_weather_data.py --demo --days 90
             uv run python src/data/preprocess_weather_data.py
             uv run python src/data/validate_weather_data.py

@@ -37,47 +37,35 @@ jobs:
         run: |
           uv sync --frozen
 
-      - name: DVC pull data
+      - name: Configure DVC remote
+        env:
+          DAGSHUB_ACCESS_KEY_ID: ${{ secrets.DAGSHUB_ACCESS_KEY_ID }}
+          DAGSHUB_SECRET_ACCESS_KEY: ${{ secrets.DAGSHUB_SECRET_ACCESS_KEY }}
         run: |
-          dvc remote modify origin --local access_key_id ${{ secrets.DAGSHUB_ACCESS_KEY_ID }}
-          dvc remote modify origin --local secret_access_key ${{ secrets.DAGSHUB_SECRET_ACCESS_KEY }}
-          dvc pull
+          dvc remote add --force -d origin s3://dvc
+          dvc remote modify origin endpointurl https://dagshub.com/Aljaz-R/IIS.s3
+          dvc remote modify origin --local access_key_id "$DAGSHUB_ACCESS_KEY_ID"
+          dvc remote modify origin --local secret_access_key "$DAGSHUB_SECRET_ACCESS_KEY"
 
-      - name: Run fetch script
+      - name: Restore previous DVC artifacts
         run: |
-          uv run python src/data/fetch_weather_data.py
+          dvc pull -r origin || echo "DVC pull could not restore all artifacts; pipeline will rebuild them."
 
-      - name: Run pre-process script
+      - name: Reproduce DVC pipeline
         run: |
-          uv run python src/data/preprocess_weather_data.py
-
-      - name: Validate data
-        run: |
-          uv run python src/data/validate_weather_data.py
-
-      - name: Build training dataset
-        run: |
-          uv run python src/features/build_dataset.py
-
-      - name: Train models
-        run: |
-          uv run python src/models/train_weather_models.py
-
-      - name: Evaluate production window
-        run: |
-          uv run python src/monitoring/evaluate_production.py
+          dvc repro
 
       - name: Commit data changes
+        env:
+          DAGSHUB_ACCESS_KEY_ID: ${{ secrets.DAGSHUB_ACCESS_KEY_ID }}
+          DAGSHUB_SECRET_ACCESS_KEY: ${{ secrets.DAGSHUB_SECRET_ACCESS_KEY }}
         run: |
-          dvc remote modify origin --local access_key_id ${{ secrets.DAGSHUB_ACCESS_KEY_ID }}
-          dvc remote modify origin --local secret_access_key ${{ secrets.DAGSHUB_SECRET_ACCESS_KEY }}
-          mkdir -p predictions
-          dvc add data
-          dvc add models reports predictions
-          dvc push
+          dvc remote modify origin --local access_key_id "$DAGSHUB_ACCESS_KEY_ID"
+          dvc remote modify origin --local secret_access_key "$DAGSHUB_SECRET_ACCESS_KEY"
+          dvc push -r origin
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Actions"
-          git add data.dvc models.dvc reports.dvc predictions.dvc .gitignore
+          git add dvc.lock .dvc/config .gitignore
           git commit -m "Update weather data and model artifacts" || echo "No changes to commit"
 
       - name: Push changes
