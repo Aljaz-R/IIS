@@ -532,8 +532,9 @@ APP_HTML = """
       const plotHeight = height - pad.top - pad.bottom;
       const temps = predictions.map(row => Number(row.temperature_c));
       const rains = predictions.map(row => Number(row.precipitation_mm || 0));
-      const minTemp = Math.floor(Math.min(...temps) - 1);
-      const maxTemp = Math.ceil(Math.max(...temps) + 1);
+      const minTemp = Math.min(-5, Math.floor(Math.min(...temps) - 1));
+      const maxTemp = Math.max(35, Math.ceil(Math.max(...temps) + 1));
+      const midTemp = Math.round((minTemp + maxTemp) / 2);
       const maxRain = Math.max(0.1, Math.ceil(Math.max(...rains) * 10) / 10);
       const xFor = index => pad.left + (index / Math.max(1, predictions.length - 1)) * plotWidth;
       const tempY = value => pad.top + ((maxTemp - value) / Math.max(1, maxTemp - minTemp)) * plotHeight;
@@ -568,6 +569,7 @@ APP_HTML = """
           <path class="chart-temp" d="${tempPath}"></path>
           ${dots}
           <text class="chart-label" x="8" y="${pad.top + 4}">${maxTemp} °C</text>
+          <text class="chart-label" x="8" y="${pad.top + plotHeight / 2 + 4}">${midTemp} °C</text>
           <text class="chart-label" x="8" y="${pad.top + plotHeight}">${minTemp} °C</text>
           <text class="chart-label" x="${width - 8}" y="${pad.top + 4}" text-anchor="end">${fmt(maxRain, 1)} mm</text>
           ${labels}

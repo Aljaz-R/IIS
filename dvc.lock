@@ -82,7 +82,7 @@ stages:
     outs:
     - path: reports/data_validation.json
       hash: md5
-      md5: 6b2437bcbd20e269f7d2f39fd43ceead
+      md5: 4bd966adda8466e22633a625b5f6fadd
       size: 3194
   build_weather_dataset:
     cmd: uv run python src/features/build_dataset.py
