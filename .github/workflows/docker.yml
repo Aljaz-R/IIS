@@ -31,7 +31,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Restore DVC artifacts or build demo artifacts
+      - name: Restore DVC artifacts
         env:
           DAGSHUB_ACCESS_KEY_ID: ${{ secrets.DAGSHUB_ACCESS_KEY_ID }}
           DAGSHUB_SECRET_ACCESS_KEY: ${{ secrets.DAGSHUB_SECRET_ACCESS_KEY }}
@@ -42,17 +42,17 @@ jobs:
             dvc remote modify origin endpointurl https://dagshub.com/Aljaz-R/IIS.s3
             dvc remote modify origin --local access_key_id "$DAGSHUB_ACCESS_KEY_ID"
             dvc remote modify origin --local secret_access_key "$DAGSHUB_SECRET_ACCESS_KEY"
-            dvc pull -r origin || echo "DVC pull failed; falling back to demo artifacts."
+            dvc pull -r origin || echo "DVC pull failed; fresh production artifacts will be rebuilt."
           fi
 
-          if [ ! -f models/weather/temperature_regressor.pkl ] || [ ! -f models/weather/precipitation_classifier.pkl ] || [ ! -f reports/model_evaluation.json ]; then
-            uv run python src/data/fetch_weather_data.py --demo --days 90
-            uv run python src/data/preprocess_weather_data.py
-            uv run python src/data/validate_weather_data.py
-            uv run python src/features/build_dataset.py
-            uv run python src/models/train_weather_models.py
-            uv run python src/monitoring/evaluate_production.py
-          fi
+      - name: Build fresh production artifacts
+        run: |
+          uv run python src/data/fetch_weather_data.py --days 180
+          uv run python src/data/preprocess_weather_data.py
+          uv run python src/data/validate_weather_data.py
+          uv run python src/features/build_dataset.py
+          uv run python src/models/train_weather_models.py
+          uv run python src/monitoring/evaluate_production.py
 
       - name: Set image name
         id: image
