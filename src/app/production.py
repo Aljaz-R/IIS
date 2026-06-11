@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -43,23 +44,28 @@ def refresh_runtime_weather(days: int) -> None:
     build_latest_features()
 
 
+def _start_background_refresh(days: int) -> None:
+    def refresh() -> None:
+        try:
+            refresh_runtime_weather(days)
+        except Exception as exc:
+            print(f"Runtime weather refresh failed; keeping packaged artifacts. Error: {exc}", flush=True)
+
+    thread = threading.Thread(target=refresh, name="weather-refresh", daemon=True)
+    thread.start()
+
+
 def run_server() -> None:
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
     refresh_on_start = _env_bool("IIS_REFRESH_ON_START", True)
     refresh_days = int(os.getenv("IIS_RUNTIME_REFRESH_DAYS", "14"))
 
-    if refresh_on_start:
-        try:
-            if _models_exist():
-                refresh_runtime_weather(refresh_days)
-            else:
-                bootstrap_days = max(refresh_days, int(os.getenv("IIS_BOOTSTRAP_DAYS", str(HISTORICAL_DAYS))))
-                bootstrap_artifacts(bootstrap_days, force_train=True)
-        except Exception as exc:
-            if not _models_exist():
-                raise
-            print(f"Runtime weather refresh failed; starting with packaged artifacts. Error: {exc}", flush=True)
+    if not _models_exist():
+        bootstrap_days = max(refresh_days, int(os.getenv("IIS_BOOTSTRAP_DAYS", str(HISTORICAL_DAYS))))
+        bootstrap_artifacts(bootstrap_days, force_train=True)
+    elif refresh_on_start:
+        _start_background_refresh(refresh_days)
 
     serve(host=host, port=port)
 
