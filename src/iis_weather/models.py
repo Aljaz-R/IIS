@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import math
 import pickle
 import warnings
@@ -31,11 +32,12 @@ from .config import (
     MODELS_DIR,
     PRECIPITATION_THRESHOLD_MM,
     RANDOM_STATE,
+    RAW_FORECAST_DIR,
     REPORTS_DIR,
     ROOT_DIR,
     SUPERVISED_DATASET,
 )
-from .io import load_cities, write_json
+from .io import city_slug, load_cities, write_json
 from .preprocessing import build_latest_features, build_supervised_dataset
 
 TEMPERATURE_MODEL_FILE = MODELS_DIR / "temperature_regressor.pkl"
@@ -259,6 +261,41 @@ def _future_time_features(row: pd.DataFrame, future_time: pd.Timestamp) -> pd.Da
     return updated
 
 
+def _load_forecast_guidance(city: str) -> pd.DataFrame:
+    path = RAW_FORECAST_DIR / f"{city_slug(city)}.json"
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return pd.DataFrame()
+    hourly = payload.get("hourly") or {}
+    if not hourly:
+        return pd.DataFrame()
+    frame = pd.DataFrame(hourly)
+    if frame.empty or "time" not in frame.columns:
+        return pd.DataFrame()
+    frame["time"] = pd.to_datetime(frame["time"], errors="coerce")
+    for column in ["precipitation", "precipitation_probability"]:
+        if column not in frame.columns:
+            frame[column] = np.nan
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    return frame.dropna(subset=["time"]).sort_values("time").reset_index(drop=True)
+
+
+def _forecast_row_for_time(forecast: pd.DataFrame, future_time: pd.Timestamp) -> pd.Series | None:
+    if forecast.empty:
+        return None
+    target = future_time.round("h")
+    delta = (forecast["time"] - target).abs()
+    if delta.empty:
+        return None
+    index = delta.idxmin()
+    if pd.isna(index) or delta.loc[index] > pd.Timedelta(minutes=45):
+        return None
+    return forecast.loc[index]
+
+
 def predict_next_24h(city: str, latest_path: Path = LATEST_FEATURES) -> dict[str, Any]:
     temperature_bundle = _load_bundle(TEMPERATURE_MODEL_FILE)
     precipitation_bundle = _load_bundle(PRECIPITATION_MODEL_FILE)
@@ -275,6 +312,7 @@ def predict_next_24h(city: str, latest_path: Path = LATEST_FEATURES) -> dict[str
     feature_columns = temperature_bundle["feature_columns"]
     temperature_model = temperature_bundle["model"]
     precipitation_model = precipitation_bundle["model"]
+    forecast_guidance = _load_forecast_guidance(str(row.iloc[0]["city"]))
     predictions = []
 
     for hour in range(1, 25):
@@ -282,7 +320,8 @@ def predict_next_24h(city: str, latest_path: Path = LATEST_FEATURES) -> dict[str
         future_row = _future_time_features(row, future_time)
         X_future = future_row[feature_columns]
         temperature = float(temperature_model.predict(X_future)[0])
-        precipitation_probability = float(precipitation_model.predict_proba(X_future)[0, 1])
+        model_precipitation_probability = float(precipitation_model.predict_proba(X_future)[0, 1])
+        precipitation_probability = model_precipitation_probability
         recent_amounts = [
             float(row.iloc[0].get("precipitation_lag_1", 0.0)),
             float(row.iloc[0].get("precipitation_lag_2", 0.0)),
@@ -295,17 +334,27 @@ def predict_next_24h(city: str, latest_path: Path = LATEST_FEATURES) -> dict[str
         recent_positive = [value for value in recent_amounts if value > 0]
         typical_intensity = float(np.mean(recent_positive)) if recent_positive else 0.8
         precipitation_mm = precipitation_probability * max(0.5, typical_intensity)
+        forecast_row = _forecast_row_for_time(forecast_guidance, future_time)
+        if forecast_row is not None:
+            forecast_probability = forecast_row.get("precipitation_probability")
+            forecast_precipitation = forecast_row.get("precipitation")
+            if pd.notna(forecast_probability):
+                precipitation_probability = max(precipitation_probability, float(forecast_probability) / 100)
+            if pd.notna(forecast_precipitation):
+                precipitation_mm = max(precipitation_mm, float(forecast_precipitation))
+        precipitation_expected = precipitation_probability >= 0.5 or precipitation_mm > PRECIPITATION_THRESHOLD_MM
         predictions.append(
             {
                 "time": future_time.isoformat(),
                 "temperature_c": round(temperature, 2),
                 "precipitation_mm": round(max(precipitation_mm, 0.0), 2),
                 "precipitation_probability": round(precipitation_probability, 4),
-                "precipitation_expected": bool(precipitation_probability >= 0.5),
+                "model_precipitation_probability": round(model_precipitation_probability, 4),
+                "precipitation_expected": bool(precipitation_expected),
             }
         )
         row["temperature_c"] = temperature
-        row["precipitation_event"] = 1.0 if precipitation_probability >= 0.5 else 0.0
+        row["precipitation_event"] = 1.0 if precipitation_expected else 0.0
         row["precipitation_mm"] = precipitation_mm
         row["temperature_lag_1"] = temperature
         row["precipitation_event_lag_1"] = row["precipitation_event"]
