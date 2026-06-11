@@ -36,8 +36,10 @@ stages:
     cmd: uv run python src/features/build_dataset.py
     deps:
       - data/preprocessed/weather
+      - data/raw/weather/forecast
       - src/features/build_dataset.py
       - src/iis_weather/config.py
+      - src/iis_weather/io.py
       - src/iis_weather/preprocessing.py
     outs:
       - data/processed/weather

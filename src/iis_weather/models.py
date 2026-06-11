@@ -181,7 +181,10 @@ def train_models(
             file,
         )
 
-    latest_features = build_latest_features(LATEST_FEATURES)
+    if LATEST_FEATURES.exists():
+        latest_features = pd.read_csv(LATEST_FEATURES)
+    else:
+        latest_features = build_latest_features(LATEST_FEATURES)
     metadata = {
         "created_at": created_at,
         "experiment_id": experiment_id,

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pandas as pd
 
@@ -9,9 +11,11 @@ from .config import (
     PRECIPITATION_THRESHOLD_MM,
     PREPROCESSED_WEATHER_DIR,
     PROCESSED_WEATHER_DIR,
+    RAW_FORECAST_DIR,
     ROLLING_WINDOWS,
     SUPERVISED_DATASET,
 )
+from .io import city_slug, load_cities
 
 
 def load_preprocessed_weather_data() -> pd.DataFrame:
@@ -28,6 +32,68 @@ def load_preprocessed_weather_data() -> pd.DataFrame:
     for column in ["temperature_c", "precipitation_mm", "relative_humidity", "pressure_msl", "wind_speed_kmh"]:
         data[column] = pd.to_numeric(data[column], errors="coerce")
     return data.sort_values(["city", "time"]).reset_index(drop=True)
+
+
+def _normalise_weather_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    result = frame.rename(
+        columns={
+            "temperature_2m": "temperature_c",
+            "precipitation": "precipitation_mm",
+            "relative_humidity_2m": "relative_humidity",
+            "wind_speed_10m": "wind_speed_kmh",
+        }
+    )
+    result["time"] = pd.to_datetime(result["time"], errors="coerce")
+    for column in ["temperature_c", "precipitation_mm", "relative_humidity", "pressure_msl", "wind_speed_kmh"]:
+        if column not in result.columns:
+            result[column] = np.nan
+        result[column] = pd.to_numeric(result[column], errors="coerce")
+    return result
+
+
+def load_recent_forecast_weather_data() -> pd.DataFrame:
+    frames = []
+    cities = load_cities()
+    if cities.empty:
+        return pd.DataFrame()
+
+    for _, city in cities.iterrows():
+        path = RAW_FORECAST_DIR / f"{city_slug(city['city'])}.json"
+        if not path.exists():
+            continue
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if "hourly" not in payload:
+            continue
+
+        hourly = pd.DataFrame(payload["hourly"])
+        if not hourly.empty:
+            hourly = _normalise_weather_frame(hourly)
+        current = payload.get("current") or {}
+        current_frame = pd.DataFrame([current]) if current.get("time") else pd.DataFrame()
+        if not current_frame.empty:
+            current_frame = _normalise_weather_frame(current_frame)
+
+        frame = pd.concat([hourly, current_frame], ignore_index=True)
+        if frame.empty:
+            continue
+        current_time = pd.to_datetime(current.get("time"), errors="coerce") if current else pd.NaT
+        if pd.notna(current_time):
+            frame = frame.loc[frame["time"] <= current_time]
+        frame["city"] = city["city"]
+        frame["country"] = city["country"]
+        frame["latitude"] = city["latitude"]
+        frame["longitude"] = city["longitude"]
+        frames.append(frame)
+
+    if not frames:
+        return pd.DataFrame()
+    data = pd.concat(frames, ignore_index=True)
+    return (
+        data.dropna(subset=["time", "temperature_c", "precipitation_mm"])
+        .drop_duplicates(subset=["city", "time"], keep="last")
+        .sort_values(["city", "time"])
+        .reset_index(drop=True)
+    )
 
 
 def _add_time_features(frame: pd.DataFrame) -> pd.DataFrame:
@@ -70,8 +136,7 @@ def _city_features(city_frame: pd.DataFrame, include_targets: bool) -> pd.DataFr
     return frame
 
 
-def build_feature_frame(include_targets: bool = True) -> pd.DataFrame:
-    data = load_preprocessed_weather_data()
+def _build_feature_frame_from_data(data: pd.DataFrame, include_targets: bool) -> pd.DataFrame:
     if data.empty:
         raise ValueError("No preprocessed weather data found. Run src/data/fetch_weather_data.py and preprocess first.")
 
@@ -104,6 +169,11 @@ def build_feature_frame(include_targets: bool = True) -> pd.DataFrame:
     return features.dropna(subset=required).reset_index(drop=True)
 
 
+def build_feature_frame(include_targets: bool = True) -> pd.DataFrame:
+    data = load_preprocessed_weather_data()
+    return _build_feature_frame_from_data(data, include_targets)
+
+
 def build_supervised_dataset(output_path=SUPERVISED_DATASET) -> pd.DataFrame:
     dataset = build_feature_frame(include_targets=True)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -112,7 +182,15 @@ def build_supervised_dataset(output_path=SUPERVISED_DATASET) -> pd.DataFrame:
 
 
 def build_latest_features(output_path=LATEST_FEATURES) -> pd.DataFrame:
-    features = build_feature_frame(include_targets=False)
+    historical = load_preprocessed_weather_data()
+    recent = load_recent_forecast_weather_data()
+    data = pd.concat([historical, recent], ignore_index=True) if not recent.empty else historical
+    data = (
+        data.drop_duplicates(subset=["city", "time"], keep="last")
+        .sort_values(["city", "time"])
+        .reset_index(drop=True)
+    )
+    features = _build_feature_frame_from_data(data, include_targets=False)
     latest = (
         features.sort_values("time")
         .groupby("city", as_index=False, sort=True)
@@ -130,4 +208,3 @@ def build_all_processed_outputs() -> dict[str, int]:
     dataset = build_supervised_dataset()
     latest = build_latest_features()
     return {"rows": int(len(dataset)), "latest_rows": int(len(latest)), "cities": int(dataset["city"].nunique())}
-

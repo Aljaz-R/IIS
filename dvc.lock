@@ -9,12 +9,12 @@ stages:
       size: 926
     - path: src/iis_weather/config.py
       hash: md5
-      md5: 11f989469129110e5e6385b7f625688f
-      size: 2278
+      md5: 1af8528ba223bda901b3e101fbd0539f
+      size: 2422
     - path: src/iis_weather/ingestion.py
       hash: md5
-      md5: 1683f13ede66fda2a430ee4cac0ebd6e
-      size: 7472
+      md5: f9cdf990ca6c3e607bdf6d9ea9b00479
+      size: 7619
     - path: src/iis_weather/io.py
       hash: md5
       md5: 4f00eee1ab247f6834229975b7619be8
@@ -22,16 +22,16 @@ stages:
     outs:
     - path: data/raw/weather
       hash: md5
-      md5: 81eb67725fbaaff8f8fc42fff35c8ae6.dir
-      size: 3170590
+      md5: 10b0d58f53ef9fbc1a3169bb68a17bc3.dir
+      size: 3194676
       nfiles: 16
   preprocess_weather_data:
     cmd: uv run python src/data/preprocess_weather_data.py
     deps:
     - path: data/raw/weather
       hash: md5
-      md5: 81eb67725fbaaff8f8fc42fff35c8ae6.dir
-      size: 3170590
+      md5: 10b0d58f53ef9fbc1a3169bb68a17bc3.dir
+      size: 3194676
       nfiles: 16
     - path: src/data/preprocess_weather_data.py
       hash: md5
@@ -39,12 +39,12 @@ stages:
       size: 246
     - path: src/iis_weather/config.py
       hash: md5
-      md5: 11f989469129110e5e6385b7f625688f
-      size: 2278
+      md5: 1af8528ba223bda901b3e101fbd0539f
+      size: 2422
     - path: src/iis_weather/ingestion.py
       hash: md5
-      md5: 1683f13ede66fda2a430ee4cac0ebd6e
-      size: 7472
+      md5: f9cdf990ca6c3e607bdf6d9ea9b00479
+      size: 7619
     - path: src/iis_weather/io.py
       hash: md5
       md5: 4f00eee1ab247f6834229975b7619be8
@@ -52,16 +52,16 @@ stages:
     outs:
     - path: data/preprocessed/weather
       hash: md5
-      md5: aa1cae78efe8e57004b7428c0fb4277c.dir
-      size: 2579574
+      md5: 4421342616f739ddbd85026108cb04d7.dir
+      size: 2580671
       nfiles: 9
   validate_weather_data:
     cmd: uv run python src/data/validate_weather_data.py
     deps:
     - path: data/preprocessed/weather
       hash: md5
-      md5: aa1cae78efe8e57004b7428c0fb4277c.dir
-      size: 2579574
+      md5: 4421342616f739ddbd85026108cb04d7.dir
+      size: 2580671
       nfiles: 9
     - path: src/data/validate_weather_data.py
       hash: md5
@@ -69,8 +69,8 @@ stages:
       size: 374
     - path: src/iis_weather/config.py
       hash: md5
-      md5: 11f989469129110e5e6385b7f625688f
-      size: 2278
+      md5: 1af8528ba223bda901b3e101fbd0539f
+      size: 2422
     - path: src/iis_weather/io.py
       hash: md5
       md5: 4f00eee1ab247f6834229975b7619be8
@@ -82,58 +82,67 @@ stages:
     outs:
     - path: reports/data_validation.json
       hash: md5
-      md5: 2b4dfe681d1acd4435d99446c3677d78
-      size: 3062
+      md5: 6b2437bcbd20e269f7d2f39fd43ceead
+      size: 3194
   build_weather_dataset:
     cmd: uv run python src/features/build_dataset.py
     deps:
     - path: data/preprocessed/weather
       hash: md5
-      md5: aa1cae78efe8e57004b7428c0fb4277c.dir
-      size: 2579574
+      md5: 4421342616f739ddbd85026108cb04d7.dir
+      size: 2580671
       nfiles: 9
+    - path: data/raw/weather/forecast
+      hash: md5
+      md5: bc50eded041592f66c5b47435d8e0ca7.dir
+      size: 67315
+      nfiles: 8
     - path: src/features/build_dataset.py
       hash: md5
       md5: 3cf91428a85745a773ef76f3bfc1aca5
       size: 288
     - path: src/iis_weather/config.py
       hash: md5
-      md5: 11f989469129110e5e6385b7f625688f
-      size: 2278
+      md5: 1af8528ba223bda901b3e101fbd0539f
+      size: 2422
+    - path: src/iis_weather/io.py
+      hash: md5
+      md5: 4f00eee1ab247f6834229975b7619be8
+      size: 934
     - path: src/iis_weather/preprocessing.py
       hash: md5
-      md5: ff2fe44c938521ba6539e697bb6bfa77
-      size: 5424
+      md5: f7645c58543455e841c7073fb0875960
+      size: 8352
     outs:
     - path: data/processed/weather
       hash: md5
-      md5: 7d6c4dd21d28657765517547fad77e3c.dir
-      size: 12739138
+      md5: baae53689387c2b043b5debcc83f25ac.dir
+      size: 12765070
       nfiles: 2
   train_weather_models:
     cmd: uv run python src/models/train_weather_models.py
     deps:
     - path: data/processed/weather
       hash: md5
-      md5: 7d6c4dd21d28657765517547fad77e3c.dir
-      size: 12739138
+      md5: baae53689387c2b043b5debcc83f25ac.dir
+      size: 12765070
       nfiles: 2
     - path: src/iis_weather/config.py
       hash: md5
-      md5: 11f989469129110e5e6385b7f625688f
-      size: 2278
+      md5: 1af8528ba223bda901b3e101fbd0539f
+      size: 2422
     - path: src/iis_weather/io.py
       hash: md5
       md5: 4f00eee1ab247f6834229975b7619be8
       size: 934
     - path: src/iis_weather/models.py
       hash: md5
-      md5: eac2fe5c8a1993167e95beaaa1240eb1
-      size: 12584
+      md5: 4c65b3946a403cbc0792c523a982d05e
+      size: 12686
     - path: src/iis_weather/preprocessing.py
       hash: md5
-      md5: ff2fe44c938521ba6539e697bb6bfa77
-      size: 5424
+      md5: f7645c58543455e841c7073fb0875960
+      size: 8352
     - path: src/models/train_weather_models.py
       hash: md5
       md5: 83a5bfd816c92fe136fbbe93ca0a75ef
@@ -141,55 +150,55 @@ stages:
     outs:
     - path: models/weather
       hash: md5
-      md5: 4f3ba2ea6cb91bec8ce5b643699bc4ec.dir
-      size: 312855
+      md5: 2a5807adabb7bbb362ae87f2ebef4a7d.dir
+      size: 313107
       nfiles: 4
     - path: reports/experiments
       hash: md5
-      md5: 62f3b07d5bb0bfa30a26c5da7cef0ac0.dir
+      md5: ea896d480bbcedc97fc4f20dee319d06.dir
       size: 2986
       nfiles: 2
     - path: reports/model_evaluation.json
       hash: md5
-      md5: 06f9f48729d71734765dc274e966ddfa
+      md5: 79a32a09c6271b25dedaa6973d2e2b4f
       size: 2072
   evaluate_production:
     cmd: uv run python src/monitoring/evaluate_production.py
     deps:
     - path: data/processed/weather
       hash: md5
-      md5: 7d6c4dd21d28657765517547fad77e3c.dir
-      size: 12739138
+      md5: baae53689387c2b043b5debcc83f25ac.dir
+      size: 12765070
       nfiles: 2
     - path: models/weather
       hash: md5
-      md5: 4f3ba2ea6cb91bec8ce5b643699bc4ec.dir
-      size: 312855
+      md5: 2a5807adabb7bbb362ae87f2ebef4a7d.dir
+      size: 313107
       nfiles: 4
     - path: reports/model_evaluation.json
       hash: md5
-      md5: 06f9f48729d71734765dc274e966ddfa
+      md5: 79a32a09c6271b25dedaa6973d2e2b4f
       size: 2072
     - path: src/iis_weather/config.py
       hash: md5
-      md5: 11f989469129110e5e6385b7f625688f
-      size: 2278
+      md5: 1af8528ba223bda901b3e101fbd0539f
+      size: 2422
     - path: src/iis_weather/io.py
       hash: md5
       md5: 4f00eee1ab247f6834229975b7619be8
       size: 934
     - path: src/iis_weather/models.py
       hash: md5
-      md5: eac2fe5c8a1993167e95beaaa1240eb1
-      size: 12584
+      md5: 4c65b3946a403cbc0792c523a982d05e
+      size: 12686
     - path: src/iis_weather/monitoring.py
       hash: md5
       md5: 43750769d29bc1dbacc344462283d779
       size: 2975
     - path: src/iis_weather/preprocessing.py
       hash: md5
-      md5: ff2fe44c938521ba6539e697bb6bfa77
-      size: 5424
+      md5: f7645c58543455e841c7073fb0875960
+      size: 8352
     - path: src/monitoring/evaluate_production.py
       hash: md5
       md5: 37f7f171cd71960e978a1d8455a5de85
@@ -197,5 +206,5 @@ stages:
     outs:
     - path: reports/production_monitoring.json
       hash: md5
-      md5: d8c2861fbe93b61e831745db461045b9
-      size: 826
+      md5: 6afff3cef26362df60d05b6f09b3ed03
+      size: 860

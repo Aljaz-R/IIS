@@ -15,6 +15,7 @@ from .config import (
     FORECAST_API_URL,
     HISTORICAL_DAYS,
     HISTORY_API_URL,
+    CURRENT_WEATHER_VARIABLES,
     HOURLY_FORECAST_VARIABLES,
     HOURLY_HISTORY_VARIABLES,
     PREPROCESSED_WEATHER_DIR,
@@ -71,7 +72,9 @@ def fetch_weather_data(days: int = HISTORICAL_DAYS, include_forecast: bool = Tru
                     FORECAST_API_URL,
                     {
                         **base_params,
-                        "forecast_days": 2,
+                        "forecast_hours": 24,
+                        "past_hours": 48,
+                        "current": ",".join(CURRENT_WEATHER_VARIABLES),
                         "hourly": ",".join(HOURLY_FORECAST_VARIABLES),
                     },
                 )

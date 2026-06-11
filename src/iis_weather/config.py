@@ -52,4 +52,10 @@ HOURLY_FORECAST_VARIABLES = [
     "pressure_msl",
     "wind_speed_10m",
 ]
-
+CURRENT_WEATHER_VARIABLES = [
+    "temperature_2m",
+    "precipitation",
+    "relative_humidity_2m",
+    "pressure_msl",
+    "wind_speed_10m",
+]
