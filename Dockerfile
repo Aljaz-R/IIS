@@ -11,6 +11,12 @@ RUN pip install --no-cache-dir uv && uv sync --frozen --no-install-project
 
 COPY . .
 
+ARG IIS_BOOTSTRAP_ARTIFACTS=true
+ARG IIS_BOOTSTRAP_DAYS=180
+RUN if [ "$IIS_BOOTSTRAP_ARTIFACTS" = "true" ]; then \
+    uv run --no-sync python src/app/production.py bootstrap --days "$IIS_BOOTSTRAP_DAYS"; \
+    fi
+
 EXPOSE 8000
 
-CMD ["uv", "run", "--no-sync", "python", "src/app/serve.py", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "--no-sync", "python", "src/app/production.py", "serve"]

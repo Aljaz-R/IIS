@@ -101,6 +101,16 @@ sliko. Na push v `main` ali `master` jo objavi v GitHub Container Registry
 (`ghcr.io`). Ce je nastavljen secret `RENDER_DEPLOY_HOOK_URL`, workflow po buildu
 sprozi se produkcijski deploy preko Render deploy hooka.
 
+Dockerfile je pripravljen tudi za neposreden Render build iz GitHub repozitorija:
+med buildom po privzetem zgradi podatkovne in modelne artefakte, ob zagonu pa se
+osvezi zadnje meritve in Open-Meteo forecast podatke. Zato produkcija ne ostane
+pri starih podatkih, npr. pri napovedi padavin `suho/dez`.
+
+Uporabni produkcijski nastavitvi:
+
+- `IIS_REFRESH_ON_START=true` privzeto osvezi podatke ob zagonu,
+- `IIS_RUNTIME_REFRESH_DAYS=14` doloca, koliko dni zgodovine se osvezi ob zagonu.
+
 Za produkcijski deploy moras v GitHub repozitoriju nastaviti:
 
 - `DAGSHUB_ACCESS_KEY_ID`,
